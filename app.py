@@ -14,6 +14,10 @@ codebook — no real patient posts are reproduced.
 Run:  streamlit run app.py
 """
 
+import json
+import pathlib
+import sqlite3
+
 import streamlit as st
 
 # --------------------------------------------------------------------------
@@ -145,6 +149,106 @@ SEED = [
 
 
 # --------------------------------------------------------------------------
+# SQLite persistence — local-first; data never leaves this machine.
+# This honours the data-dignity argument the artefact makes.
+# --------------------------------------------------------------------------
+DB_PATH = pathlib.Path(__file__).parent / "braid.db"
+
+
+def _init_db():
+    """
+    Create tables and seed synthetic posts on first run.
+    CREATE TABLE IF NOT EXISTS is idempotent — safe to call on every startup.
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS posts (
+                id         INTEGER PRIMARY KEY,
+                author     TEXT    NOT NULL,
+                disclosure INTEGER NOT NULL DEFAULT 1,
+                up         INTEGER NOT NULL DEFAULT 0,
+                lived      TEXT    NOT NULL DEFAULT '',
+                clinical   TEXT    NOT NULL DEFAULT '',
+                codes      TEXT    NOT NULL DEFAULT '[]'
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS responses (
+                id         INTEGER PRIMARY KEY,
+                post_id    INTEGER NOT NULL REFERENCES posts(id),
+                author     TEXT    NOT NULL,
+                disclosure INTEGER NOT NULL DEFAULT 1,
+                lived      TEXT    NOT NULL DEFAULT '',
+                clinical   TEXT    NOT NULL DEFAULT '',
+                codes      TEXT    NOT NULL DEFAULT '[]'
+            )
+        """)
+        # Only seed when the table is genuinely empty (i.e. first ever run).
+        if conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 0:
+            for p in SEED:
+                conn.execute(
+                    "INSERT INTO posts (id, author, disclosure, up, lived, clinical, codes)"
+                    " VALUES (?,?,?,?,?,?,?)",
+                    (p["id"], p["author"], p["disclosure"], p["up"],
+                     p["lived"], p["clinical"], json.dumps(p["codes"]))
+                )
+                for r in p.get("responses", []):
+                    conn.execute(
+                        "INSERT INTO responses (post_id, author, disclosure, lived, clinical, codes)"
+                        " VALUES (?,?,?,?,?,?)",
+                        (p["id"], r["author"], r["disclosure"],
+                         r["lived"], r["clinical"], json.dumps(r["codes"]))
+                    )
+
+
+def _load_posts():
+    """Return all posts with nested responses, newest first."""
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            "SELECT id, author, disclosure, up, lived, clinical, codes"
+            " FROM posts ORDER BY id DESC"
+        ).fetchall()
+        posts = []
+        for pid, author, disc, up, lived, clinical, codes in rows:
+            resp_rows = conn.execute(
+                "SELECT author, disclosure, lived, clinical, codes"
+                " FROM responses WHERE post_id=? ORDER BY id",
+                (pid,)
+            ).fetchall()
+            posts.append({
+                "id": pid,
+                "author": author,
+                "disclosure": disc,
+                "up": up,
+                "lived": lived,
+                "clinical": clinical,
+                "codes": json.loads(codes),
+                "responses": [
+                    {"author": ra, "disclosure": rd,
+                     "lived": rl, "clinical": rc,
+                     "codes": json.loads(rco)}
+                    for ra, rd, rl, rc, rco in resp_rows
+                ],
+            })
+        return posts
+
+
+def _insert_post(author, disclosure, lived, clinical, codes):
+    """Write a new post to the database; return its auto-assigned id."""
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.execute(
+            "INSERT INTO posts (author, disclosure, up, lived, clinical, codes)"
+            " VALUES (?,?,0,?,?,?)",
+            (author, disclosure, lived, clinical, json.dumps(codes))
+        )
+        return cur.lastrowid
+
+
+# Initialise (or verify) the database at import time — runs once per process.
+_init_db()
+
+
+# --------------------------------------------------------------------------
 # Small helpers
 # --------------------------------------------------------------------------
 def register_of(item):
@@ -254,9 +358,10 @@ def post_html(p, researcher):
 # --------------------------------------------------------------------------
 st.set_page_config(page_title="Braid — prototype", page_icon="🧵", layout="centered")
 
-# session state
+# session state — posts are loaded fresh from SQLite on each browser session.
+# The DB is the source of truth; session_state is just the per-request cache.
 if "posts" not in st.session_state:
-    st.session_state.posts = [dict(p) for p in SEED]
+    st.session_state.posts = _load_posts()
 for k, v in {"c_lived": "", "c_clinical": "", "c_disc": DISC_LABELS[1]}.items():
     st.session_state.setdefault(k, v)
 
@@ -267,13 +372,10 @@ def submit_post():
     if not lived and not clinical:
         return
     disc = DISC_LABELS.index(st.session_state.c_disc)
-    st.session_state.posts.insert(0, {
-        "id": len(st.session_state.posts) + 1000,
-        "author": "Anonymous" if disc == 0 else "You",
-        "disclosure": disc, "up": 0,
-        "lived": lived, "clinical": clinical,
-        "codes": ["(awaiting coding)"], "responses": [],
-    })
+    author = "Anonymous" if disc == 0 else "You"
+    # Persist to SQLite first, then reload so the feed reflects the DB state.
+    _insert_post(author, disc, lived, clinical, ["(awaiting coding)"])
+    st.session_state.posts = _load_posts()
     st.session_state.c_lived = ""
     st.session_state.c_clinical = ""
     st.session_state.c_disc = DISC_LABELS[1]
