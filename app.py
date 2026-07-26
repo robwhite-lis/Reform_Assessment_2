@@ -23,6 +23,7 @@ import streamlit as st
 C = {
     "pine": "#153F3B",
     "pineDeep": "#0E2E2B",
+    "navy": "#1E2B4A",      # method accent — sidebar header, researcher/analytical UI
     "sage": "#8DB3A6",
     "paper": "#EEF1F0",
     "card": "#FFFFFF",
@@ -191,14 +192,19 @@ def register_block(kind, text):
 
 
 def code_tags(codes):
+    # Navy used here as the researcher/analytical UI colour, per the Assessment 1 palette.
     pills = "".join(
         f'<span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;'
-        f'color:{C["pineDeep"]};background:#F1EFE6;border:1px dashed {C["sage"]};'
+        f'color:{C["navy"]};background:#EEF0F6;border:1px dashed {C["navy"]}44;'
         f'border-radius:4px;padding:1px 6px;margin:2px 4px 0 0;'
         f'display:inline-block;">{c}</span>'
         for c in codes
     )
-    return f'<div style="margin-top:8px;">{pills}</div>'
+    return (f'<div style="margin-top:8px;padding:6px 8px;background:#F2F4F9;'
+            f'border-left:3px solid {C["navy"]};border-radius:0 6px 6px 0;">'
+            f'<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;'
+            f'font-weight:700;color:{C["navy"]};margin-bottom:4px;">Researcher view</div>'
+            f'{pills}</div>')
 
 
 def body_html(item, researcher):
@@ -275,8 +281,16 @@ def submit_post():
 
 # --- sidebar: researcher view + about -------------------------------------
 with st.sidebar:
-    st.markdown("### Braid")
-    st.caption("M7004R Assessment 2 · prototype")
+    # Navy header block — matches the method/analytical register of the Assessment 1 slides.
+    st.markdown(
+        f'<div style="background:{C["navy"]};color:#F4F7F5;border-radius:10px;'
+        f'padding:12px 14px;margin-bottom:10px;">'
+        f'<span style="font-family:Georgia,serif;font-size:20px;font-weight:700;">Braid</span>'
+        f'<div style="font-size:10px;color:{C["sage"]};margin-top:3px;">'
+        f'M7004R Assessment 2 · prototype</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
     researcher = st.toggle("Researcher view", value=False,
                            help="Overlay the netnography codebook tags on every post.")
     st.divider()
@@ -291,11 +305,11 @@ with st.sidebar:
 
 # --- header ---------------------------------------------------------------
 st.markdown(
-    f'<div style="background:{C["pine"]};color:#F4F7F5;border-radius:14px;'
+    f'<div style="background:{C["navy"]};color:#F4F7F5;border-radius:14px;'
     f'padding:18px 20px;margin-bottom:6px;">'
     f'<span style="font-family:Georgia,serif;font-size:30px;font-weight:700;">Braid</span>'
     f'<span style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
-    f'text-transform:uppercase;color:{C["pine"]};background:{C["sage"]};'
+    f'text-transform:uppercase;color:{C["navy"]};background:{C["sage"]};'
     f'border-radius:4px;padding:3px 7px;margin-left:10px;">Prototype</span>'
     f'<div style="font-size:12.5px;color:{C["sage"]};margin-top:6px;">'
     f'Clinical facts and lived experience, side by side — you choose what to show.'
