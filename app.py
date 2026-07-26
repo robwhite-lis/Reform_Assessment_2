@@ -786,7 +786,7 @@ def _show_admin():
             f'<div style="font-size:9.5px;text-transform:uppercase;letter-spacing:0.08em;'
             f'font-weight:700;color:{C["clinical"]};">Clinical lane</div>'
             f'<div style="font-size:14px;color:{C["ink"]};margin-top:5px;">'
-            f'Posts appear as <strong>{local["verified_name"]}</strong></div>'
+            f'Posts appear by default as <strong>{local["verified_name"]}</strong></div>'
             f'<div style="font-size:11px;color:{C["muted"]};margin-top:3px;">'
             f'Named · authoritative register</div>'
             f'</div>',
@@ -799,7 +799,7 @@ def _show_admin():
             f'<div style="font-size:9.5px;text-transform:uppercase;letter-spacing:0.08em;'
             f'font-weight:700;color:{C["lived"]};">Lived lane</div>'
             f'<div style="font-size:14px;color:{C["ink"]};margin-top:5px;">'
-            f'Posts appear as <strong>{first_alias}</strong></div>'
+            f'Posts appear by default as <strong>{first_alias}</strong></div>'
             f'<div style="font-size:11px;color:{C["muted"]};margin-top:3px;">'
             f'Aliased · experiential register</div>'
             f'</div>',
