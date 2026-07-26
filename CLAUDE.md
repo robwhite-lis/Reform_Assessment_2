@@ -43,6 +43,32 @@ Three design moves carry the argument. Do not remove or dilute them without aski
   register accents). Keep visual continuity.
 - Copy is plain, patient-facing, UK spelling. Name things by what people do.
 
+## Exact colour palette (Assessment 1 portfolio — maintain continuity)
+These hex values are taken directly from the Assessment 1 submission and must
+be used consistently. Do not substitute approximations.
+
+| Role | Hex | Usage |
+|---|---|---|
+| Pine (primary dark) | `#153F3B` | Header backgrounds, primary buttons |
+| Pine deep | `#0E2E2B` | Header border, hover states |
+| Navy (method accent) | `#1E2B4A` | Secondary headers, analytical UI elements |
+| Sage | `#8DB3A6` | Subtitles, secondary accents, toggle active |
+| Paper | `#EEF1F0` | Page background |
+| Card white | `#FFFFFF` | Post card backgrounds |
+| Ink | `#1D2B29` | Body text |
+| Muted | `#5E6E6B` | Secondary text, metadata |
+| Line | `#DFE4E2` | Borders, dividers |
+| Clinical (cool) | `#2C6E7F` | Clinical lane accent, Stethoscope icon |
+| Clinical bg | `#E7F0F1` | Clinical register block background |
+| Clinical border | `#BFD8DC` | Clinical register block border |
+| Lived (warm) | `#BE6A38` | Lived lane accent, Heart icon |
+| Lived bg | `#F7EBE1` | Lived register block background |
+| Lived border | `#E7CBB2` | Lived register block border |
+
+The navy (`#1E2B4A`) is currently absent from the app — it should be introduced
+as the colour for the sidebar header and any secondary analytical UI elements
+(e.g. the researcher view panel) to match the Assessment 1 method slides.
+
 ## Tech
 - Python + Streamlit. Run: `pip install -r requirements.txt` then `streamlit run app.py`.
 - Owner is an experienced data/IT leader, strongest in Python, deliberately
@@ -51,14 +77,97 @@ Three design moves carry the argument. Do not remove or dilute them without aski
   an assessment. Keep dependencies minimal.
 
 ## Build plan (ordered — what's left)
-1. **SQLite persistence** — replace session_state store with a local `braid.db`;
-   posts and replies survive refresh. Enables the local-first argument.
-2. **Live reply flow** — let users add responses (with register + disclosure), not
-   just seed replies. This is where the netnography findings actually live.
-3. **Trace seed data to `Netnography.xlsx`** — link each synthetic post to the
-   coded row(s) it derives from, so the method→artefact chain is explicit.
-4. **Portfolio framing** — screenshots + the 800-word text (build the app with the
-   text in mind; two of the four marking criteria are the text and its coherence).
+
+### 1. Colour scheme alignment
+Update `app.py` to use the exact hex values in the palette table above.
+Specifically: introduce `#1E2B4A` navy for sidebar header and researcher-view
+elements. Verify all existing values match the table exactly.
+
+### 2. Identity management (PRIORITY — central to Assessment 2 argument)
+This is the feature that operationalises the thesis most directly.
+
+**What to build:**
+- An onboarding screen shown on first run (detected via SQLite flag).
+- User enters a **verified display name** (seen only by moderators — stored
+  locally, never shown in the feed).
+- User creates **1–3 aliases** (pseudonyms they choose; only they know which
+  is theirs). Stored in SQLite against a local session token.
+- When composing a post, the disclosure dial shows the user's *actual aliases*
+  rather than abstract labels. E.g. "Post as MorningTide" or "Post as yourself."
+- The Lived lane defaults the dial to the user's first alias (pseudonym).
+  The Clinical lane defaults to their verified display name. This is
+  **register-linked disclosure** — the central design argument.
+- A visible safeguard note appears on Lived-lane posts:
+  "Posted under alias · not linked to your clinical identity in this space."
+
+**What NOT to build:**
+- Do not attempt cross-platform identity (e.g. injecting aliases into Facebook).
+  That is architecturally impossible and not what is claimed. The Assessment 2
+  text handles this as a design argument and policy aspiration, not a feature.
+- Do not build login, authentication, or any server-side identity layer.
+  A local SQLite token is sufficient for a prototype.
+
+**Why this matters for the argument:**
+The assessment text cites Marwick and boyd (2011) on "context collapse" — the
+way platforms like Facebook flatten multiple audience contexts into one identity,
+silencing the vulnerable self. The identity management feature is Braid's direct
+design response: verification is separated from visibility, and register-linked
+defaults mean a patient naturally uses their real name for clinical questions and
+an alias for emotional disclosure — without having to think about it.
+
+### 3. SQLite persistence
+Replace `st.session_state` post store with a local `braid.db`. Posts, replies,
+and user identity (verified name + aliases) all survive refresh. This enables
+the local-first / data-dignity argument in the 800-word text.
+
+### 4. Live reply flow
+Let users add responses to any post, with full register + disclosure choice.
+Currently only seeded replies exist. This is where the netnography findings
+live — a Lived post drawing a braided reply should be demonstrable live.
+
+### 5. Trace seed data to Netnography.xlsx
+Add a small metadata field to each seeded post linking it to the coded row
+it derives from (e.g. "Derived from RED#6 · Primary code: Venting/catharsis").
+Visible in researcher view only. Makes the method→artefact chain explicit.
+
+## Data files in this repo
+
+### Netnography.xlsx
+The actual coded dataset from the Assessment 1 netnography study.
+- Sheet: `Data` — 20 rows (10 Facebook, 10 Reddit), one per post
+- Key columns: Post ID (FBG#1–10, RED#1–10), Platform, Primary Post Sentiment
+  Code, Secondary Post Sentiment Code, Primary Response Sentiment Code,
+  Secondary Response Sentiment Code
+- Post IDs follow the pattern FBG#N (Facebook group) and RED#N (Reddit)
+- Coding uses the 23-code taxonomy (11 post codes, 12 response codes) from
+  the Assessment 1 codebook
+- This file is the evidential basis for the seeded synthetic posts in app.py.
+  Each seeded post should be traceable to a specific row in this file.
+- Use openpyxl to read it. Do not modify it — it is the primary research record.
+- In researcher view, display the source row reference alongside the codebook
+  tags so the method→artefact link is visible to the marker.
+
+## Theoretical framing (for any explanatory text in the app)
+The About panel and any in-app explanatory copy should reflect this framing:
+
+- **The Anonymity Paradox**: pseudonymous Reddit produced more emotional and
+  experiential disclosure than the identity-disclosed private Facebook group.
+  Platform architecture shapes which registers of knowledge patients feel able
+  to produce — not just what they share, but what they treat as legitimate.
+
+- **Context collapse** (Marwick and boyd, 2011): social media technologies
+  flatten multiple audience contexts into one, making it structurally difficult
+  to vary self-presentation. Facebook forces patients to perform a single
+  identity to moderators, acquaintances, and close peers simultaneously.
+  The vulnerable, back-stage self goes quiet.
+  Full reference: Marwick, A.E. and boyd, d. (2011) 'I tweet honestly, I tweet
+  passionately: Twitter users, context collapse, and the imagined audience',
+  *New Media & Society*, 13(1), pp. 114–133. DOI: 10.1177/1461444810365313.
+
+- **Braid's response**: verification is separated from visibility. Register-linked
+  disclosure defaults mean the Clinical lane surfaces the named, authoritative
+  self; the Lived lane surfaces the aliased, vulnerable self. Both are the same
+  verified person — the link is held locally, not exposed to the community.
 
 ## Academic-integrity note
 The core ideas, research and design are the student's own; AI assistance on the
