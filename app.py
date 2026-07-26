@@ -122,7 +122,7 @@ SEED = [
                      "at the moment — happy to be corrected."),
         "codes": ["Factual/clinical information-sharing"],
         "responses": [
-            {"author": "PineMarten", "disclosure": 1,
+            {"author": "HeatherM", "disclosure": 2,
              "lived": "",
              "clinical": ("Useful, thanks — one flag though: point 3 mixes up neoadjuvant "
                           "and adjuvant timing. Worth fixing before others rely on it."),
@@ -143,6 +143,104 @@ SEED = [
              "clinical": ("Just keep the conversation open with your team so it stays a "
                           "pause, not a door closing."),
              "codes": ["Validation/agreement", "Redirect to professional"]},
+        ],
+    },
+    # ── Posts 6–10: same verified person, different aliases, different lanes ──
+    # These demonstrate the core design argument: register-linked disclosure.
+    # Posts 6 and 7 are both Helen Marsh — RiverStone in the Lived lane,
+    # HeatherM in the Clinical lane. The community sees two distinct voices;
+    # the moderator view (Identity page) shows they are the same verified person.
+    {
+        "id": 6, "author": "RiverStone", "disclosure": 1, "up": 21,
+        "lived": ("Two years since my last clear scan and I cried in the car park. "
+                  "Not sadness — just this enormous, complicated relief that I'm still here. "
+                  "Does the weight of these anniversaries ever get lighter?"),
+        "clinical": "",
+        "codes": ["Emotional support-seeking", "Experiential anecdote"],
+        "responses": [
+            {"author": "MorningTide", "disclosure": 1,
+             "lived": ("It changes shape rather than gets lighter, I think. Year three "
+                       "I stopped expecting to feel normal about it and started just "
+                       "letting it be what it was."),
+             "clinical": "",
+             "codes": ["Emotional reassurance", "Experiential anecdote"]},
+        ],
+    },
+    {
+        # Helen Marsh again — same verified person as RiverStone above, but posting
+        # in the Clinical lane as HeatherM. Disclosure 2 = Known to moderators.
+        "id": 7, "author": "HeatherM", "disclosure": 2, "up": 18,
+        "lived": "",
+        "clinical": ("NICE updated its guidance on adjuvant immunotherapy eligibility "
+                     "last month. If you completed primary treatment in the last two years "
+                     "it is worth asking your team whether you fall within the revised "
+                     "criteria. Happy to share the summary."),
+        "codes": ["Factual/clinical information-sharing", "Redirect to professional"],
+        "responses": [
+            {"author": "Fjord_49", "disclosure": 1,
+             "lived": "",
+             "clinical": ("This is really helpful — I had not realised the criteria had "
+                          "been updated. Already emailed my CNS."),
+             "codes": ["Thanks for factual sharing"]},
+        ],
+    },
+    # Posts 8 and 9 are both Priya Nair — NorthLight in the Clinical lane,
+    # Fjord_49 in the Lived lane. Post 9 is a direct counterpart to post 8:
+    # the same person who was asking precise clinical questions earlier now
+    # just needs somewhere safe to set that self down for a moment.
+    {
+        "id": 8, "author": "NorthLight", "disclosure": 1, "up": 9,
+        "lived": "",
+        "clinical": ("Does anyone know whether BRAF-positive status is still required "
+                     "for the COLUMBUS-AD extension cohort? My oncologist mentioned it "
+                     "but the trial website has not been updated with the revised criteria."),
+        "codes": ["Factual/clinical information-seeking"],
+        "responses": [
+            {"author": "HeatherM", "disclosure": 2,
+             "lived": "",
+             "clinical": ("BRAF V600E/K is still an inclusion criterion for the extension. "
+                          "Your oncologist should have the full checklist — worth asking them "
+                          "to walk through it line by line with you."),
+             "codes": ["Factual/clinical information", "Redirect to professional"]},
+        ],
+    },
+    {
+        # Priya Nair again — same verified person as NorthLight above, but posting
+        # in the Lived lane as Fjord_49. The contrast with post 8 shows the app's
+        # argument in action: one person, two registers, two appropriate identities.
+        "id": 9, "author": "Fjord_49", "disclosure": 1, "up": 29,
+        "lived": ("I have been reading everything, asking all the right questions, "
+                  "tracking every data point. And today I just needed to not be a "
+                  "patient for a bit. No advice needed — just needed to say it "
+                  "somewhere safe."),
+        "clinical": "",
+        "codes": ["Venting/catharsis", "Emotional support-seeking"],
+        "responses": [
+            {"author": "RiverStone", "disclosure": 1,
+             "lived": ("Said. Heard. You are allowed to put it down for a while."),
+             "clinical": "",
+             "codes": ["Validation/agreement", "Emotional reassurance"]},
+        ],
+    },
+    {
+        # Sarah Chen posting as TealWing — her second alias (MorningTide is her first).
+        # A braided post, showing both registers from a single voice.
+        "id": 10, "author": "TealWing", "disclosure": 1, "up": 41,
+        "lived": ("Had an appointment yesterday where my oncologist was actually honest "
+                  "about uncertainty rather than defaulting to reassurance. It was "
+                  "unsettling and also, strangely, the most human I have felt in a "
+                  "consultation in months."),
+        "clinical": ("For anyone navigating ambiguous scan results: ask your team to "
+                     "distinguish between 'we don't know yet' and 'there is no cause "
+                     "for concern' — those are very different and you deserve the "
+                     "distinction to be made explicit."),
+        "codes": ["Experiential anecdote", "Practical suggestion"],
+        "responses": [
+            {"author": "SlateGrey", "disclosure": 1,
+             "lived": ("This is so important. Honest uncertainty is harder to sit with "
+                       "but far more respectful than false comfort."),
+             "clinical": "",
+             "codes": ["Validation/agreement", "Emotional reassurance"]},
         ],
     },
 ]
@@ -298,6 +396,48 @@ def _insert_post(author, disclosure, lived, clinical, codes):
         return cur.lastrowid
 
 
+def _seed_upgrade():
+    """
+    Apply incremental fixes to an existing database.
+    Called on every startup — all operations are idempotent so safe to re-run.
+
+    Fixes applied:
+      • Post 4: PineMarten response → HeatherM.  PineMarten and SeaGlass are
+        both aliases of Tom Bradley, so the original seed had him replying to
+        himself.  HeatherM (Helen Marsh) is the correct author.
+      • Posts 6–10: demonstration posts showing same verified person using
+        different aliases across Clinical and Lived lanes.  Not inserted by
+        _init_db because that only seeds when the posts table is empty.
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        # ── Fix: post 4 self-reply (PineMarten → HeatherM) ───────────────
+        conn.execute(
+            "UPDATE responses SET author='HeatherM', disclosure=2"
+            " WHERE post_id=4 AND author='PineMarten'"
+        )
+        # ── Add posts 6–10 if not already present ────────────────────────
+        existing_ids = {
+            row[0] for row in conn.execute("SELECT id FROM posts").fetchall()
+        }
+        for p in SEED:
+            if p["id"] < 6 or p["id"] in existing_ids:
+                continue
+            conn.execute(
+                "INSERT INTO posts (id, author, disclosure, up, lived, clinical, codes)"
+                " VALUES (?,?,?,?,?,?,?)",
+                (p["id"], p["author"], p["disclosure"], p["up"],
+                 p["lived"], p["clinical"], json.dumps(p["codes"]))
+            )
+            for r in p.get("responses", []):
+                conn.execute(
+                    "INSERT INTO responses"
+                    " (post_id, author, disclosure, lived, clinical, codes)"
+                    " VALUES (?,?,?,?,?,?)",
+                    (p["id"], r["author"], r["disclosure"],
+                     r["lived"], r["clinical"], json.dumps(r["codes"]))
+                )
+
+
 # ── Identity helpers ──────────────────────────────────────────────────────
 
 def _onboarding_complete():
@@ -422,6 +562,8 @@ def _get_all_users():
 
 # Initialise (or verify) the database at import time — runs once per process.
 _init_db()
+# Apply incremental seed fixes — safe to call on every startup.
+_seed_upgrade()
 
 
 # --------------------------------------------------------------------------
