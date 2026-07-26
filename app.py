@@ -978,34 +978,82 @@ if page == "Identity":
     st.stop()
 
 # ── Community feed ────────────────────────────────────────────────────────
+#
+# position:sticky fails in Streamlit because intermediate wrapper divs have
+# overflow:hidden which silently cancels sticky. position:fixed is the only
+# reliable approach — it escapes the DOM stacking context entirely.
+#
+# Lane selection uses URL query params (?lane=all|clinical|lived) so plain
+# HTML <a> links in the fixed header can drive it without JavaScript.
 
-# Header
+# Read lane from URL — default to "all" (Whole space)
+_lane_param = st.query_params.get("lane", "all")
+lane_key    = _lane_param if _lane_param in ("all", "clinical", "lived") else "all"
+lane_accent = {"all": C["pine"], "clinical": C["clinical"], "lived": C["lived"]}[lane_key]
+
+# Build styled lane-selector buttons as HTML anchor tags.
+# Clicking sets ?lane=KEY in the URL, which triggers a Streamlit rerun.
+def _lane_btn(key, label):
+    active = (key == lane_key)
+    col    = {"all": C["pine"], "clinical": C["clinical"], "lived": C["lived"]}[key]
+    bg     = col       if active else "transparent"
+    fc     = "#FFFFFF"  if active else C["muted"]
+    bd     = f"1px solid {col}"      if active else f"1px solid {C['line']}"
+    fw     = "600"     if active else "400"
+    return (
+        f'<a href="?lane={key}" style="text-decoration:none;margin-right:6px;">'
+        f'<span style="display:inline-block;background:{bg};color:{fc};border:{bd};'
+        f'border-radius:7px;padding:5px 14px;font-size:13px;font-weight:{fw};'
+        f'cursor:pointer;white-space:nowrap;">{label}</span></a>'
+    )
+
+_lane_html = (
+    _lane_btn("all",      "Whole space") +
+    _lane_btn("clinical", "Clinical lane") +
+    _lane_btn("lived",    "Lived lane")
+)
+
+# position:fixed escapes Streamlit's overflow:hidden wrappers entirely.
+# All styling is inline — Streamlit's sanitiser strips <style> blocks and
+# class attributes, so CSS classes cannot be used here.
+# z-index:100 sits above feed cards but below Streamlit's sidebar (~999991)
+# and its own toolbar (~999990), so those always render on top.
+# left:21rem aligns with the main content area (sidebar is 21rem wide).
+# The spacer div at the bottom pushes feed content below the fixed block.
 st.markdown(
+    f'<div style="position:fixed;top:2.875rem;left:21rem;right:0;z-index:100;'
+    f'background:{C["paper"]};padding:0.75rem 1rem 0.5rem;">'
+    f'<div style="max-width:730px;margin:0 auto;">'
+
+    # Navy title block
     f'<div style="background:{C["navy"]};color:#F4F7F5;border-radius:14px;'
-    f'padding:18px 20px;margin-bottom:6px;">'
-    f'<span style="font-family:Georgia,serif;font-size:30px;font-weight:700;">'
-    f'Braid</span>'
+    f'padding:16px 20px;margin-bottom:5px;">'
+    f'<span style="font-family:Georgia,serif;font-size:28px;font-weight:700;">Braid</span>'
     f'<span style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
     f'text-transform:uppercase;color:{C["navy"]};background:{C["sage"]};'
     f'border-radius:4px;padding:3px 7px;margin-left:10px;">Prototype</span>'
-    f'<div style="font-size:12.5px;color:{C["sage"]};margin-top:6px;">'
-    f'Clinical facts and lived experience, side by side — you choose what to show.'
-    f'</div></div>',
+    f'<div style="font-size:12px;color:{C["sage"]};margin-top:5px;">'
+    f'Clinical facts and lived experience, side by side \u2014 you choose what to show.'
+    f'</div></div>'
+
+    # Caption
+    f'<div style="font-size:11.5px;color:{C["muted"]};padding:2px 2px 6px;">'
+    f'\u2139\ufe0f Synthetic content, reconstructed from the netnography codebook. '
+    f'No real patient posts are shown.</div>'
+
+    # Lane selector buttons
+    f'<div style="margin-bottom:6px;">{_lane_html}</div>'
+
+    # Lane accent bar
+    f'<div style="height:4px;background:{lane_accent};border-radius:999px;'
+    f'margin-bottom:2px;"></div>'
+
+    f'</div></div>'
+
+    # Spacer — keeps feed content below the fixed header (~185px)
+    f'<div style="height:185px;"></div>',
     unsafe_allow_html=True,
 )
-st.caption("ℹ️ Synthetic content, reconstructed from the netnography codebook. "
-           "No real patient posts are shown.")
-
-# Lane switcher
-lane = st.radio("View", ["Whole space", "Clinical lane", "Lived lane"],
-                horizontal=True, label_visibility="collapsed")
-lane_key = {"Whole space": "all", "Clinical lane": "clinical",
-            "Lived lane": "lived"}[lane]
-lane_accent = {"all": C["pine"], "clinical": C["clinical"],
-               "lived": C["lived"]}[lane_key]
-st.markdown(
-    f'<div style="height:4px;background:{lane_accent};border-radius:999px;'
-    f'margin:2px 0 14px;"></div>', unsafe_allow_html=True)
 
 # Build personalised disclosure options and store in session_state so
 # submit_post can resolve author name + level without re-building them.
