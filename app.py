@@ -529,6 +529,45 @@ def post_html(p, researcher):
             f'{author_row(p)}{body_html(p, researcher)}{engage}{responses}</div>')
 
 
+def _build_disc_options(local_user):
+    """
+    Build the personalised disclosure-dial options for the compose panel.
+    Each entry is a dict: {label, author, level}.
+
+    Mapping:
+      level 0 → Anonymous        (no alias, no verification)
+      level 1 → each alias       (verified but pseudonymous — Lived default)
+      level 2 → Known to mods    (verified, name held by moderation team)
+      level 3 → verified name    (fully named — Clinical default)
+
+    The select_slider uses 'label' as its option string; submit_post
+    looks up the chosen label in this list to get author and disc level.
+    """
+    opts = [{"label": "Anonymous", "author": "Anonymous", "level": 0}]
+    if local_user:
+        for rec in local_user["aliases"]:
+            opts.append({
+                "label": f"As {rec['alias']}",
+                "author": rec["alias"],
+                "level": 1,
+            })
+        opts.append({
+            "label": "Known to moderators",
+            "author": local_user["verified_name"],
+            "level": 2,
+        })
+        opts.append({
+            "label": f"As {local_user['verified_name']}",
+            "author": local_user["verified_name"],
+            "level": 3,
+        })
+    else:
+        # Fallback: generic labels (shouldn't reach here post-onboarding)
+        for i, d in enumerate(DISCLOSURE[1:], 1):
+            opts.append({"label": d["label"], "author": "You", "level": i})
+    return opts
+
+
 # --------------------------------------------------------------------------
 # Onboarding screen — shown once on first run
 # --------------------------------------------------------------------------
@@ -842,7 +881,7 @@ if "local_user" not in st.session_state:
 # ── Post session state ─────────────────────────────────────────────────────
 if "posts" not in st.session_state:
     st.session_state.posts = _load_posts()
-for k, v in {"c_lived": "", "c_clinical": "", "c_disc": DISC_LABELS[1]}.items():
+for k, v in {"c_lived": "", "c_clinical": ""}.items():
     st.session_state.setdefault(k, v)
 
 
@@ -851,13 +890,18 @@ def submit_post():
     clinical = st.session_state.c_clinical.strip()
     if not lived and not clinical:
         return
-    disc = DISC_LABELS.index(st.session_state.c_disc)
-    author = "Anonymous" if disc == 0 else "You"
+    # Resolve author name and disc level from the personalised options list.
+    selected_label = st.session_state.get("c_disc", "")
+    opts = st.session_state.get("disc_opts", [])
+    match = next((o for o in opts if o["label"] == selected_label), None)
+    author = match["author"] if match else "You"
+    disc   = match["level"]  if match else 1
     _insert_post(author, disc, lived, clinical, ["(awaiting coding)"])
     st.session_state.posts = _load_posts()
     st.session_state.c_lived = ""
     st.session_state.c_clinical = ""
-    st.session_state.c_disc = DISC_LABELS[1]
+    # Clear c_disc so the lane-switcher block resets to the lane default on next render.
+    st.session_state.pop("c_disc", None)
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
@@ -950,6 +994,31 @@ st.markdown(
     f'<div style="height:4px;background:{lane_accent};border-radius:999px;'
     f'margin:2px 0 14px;"></div>', unsafe_allow_html=True)
 
+# Build personalised disclosure options and store in session_state so
+# submit_post can resolve author name + level without re-building them.
+_local = st.session_state.local_user
+disc_opts = _build_disc_options(_local)
+disc_labels_p = [o["label"] for o in disc_opts]
+st.session_state["disc_opts"] = disc_opts
+
+# Register-linked disclosure default — now using the user's real alias and name:
+# Clinical lane  → "As [verified name]"  (named, authoritative self)
+# Lived / whole  → "As [first alias]"    (aliased, vulnerable self)
+if _local and _local["aliases"]:
+    _default_clinical = f"As {_local['verified_name']}"
+    _default_lived    = f"As {_local['aliases'][0]['alias']}"
+else:
+    _default_clinical = disc_labels_p[-1]   # last option = most named
+    _default_lived    = disc_labels_p[1] if len(disc_labels_p) > 1 else disc_labels_p[0]
+
+default_disc = _default_clinical if lane_key == "clinical" else _default_lived
+if "c_disc" not in st.session_state:
+    st.session_state.c_disc = default_disc
+# Reset dial whenever the user switches lanes
+if st.session_state.get("last_lane") != lane_key:
+    st.session_state.c_disc = default_disc
+    st.session_state.last_lane = lane_key
+
 # Compose panel
 with st.expander("➕ Share something", expanded=False):
     st.caption("Fill one box, or both to braid a fact and an experience together.")
@@ -959,14 +1028,32 @@ with st.expander("➕ Share something", expanded=False):
     st.text_area("Clinical — the facts", key="c_clinical",
                  placeholder="Trial data, drug details, a resource, a factual question…",
                  height=80)
-    st.select_slider("How much do you want to show?", options=DISC_LABELS,
-                     key="c_disc")
-    sel = DISC_LABELS.index(st.session_state.c_disc)
-    st.caption(f"↔ more private (Reddit-like) … more open (Facebook-like) — "
-               f"**{DISCLOSURE[sel]['sub']}**")
-    st.markdown("You will appear as: " +
-                author_row({"author": "Anonymous" if sel == 0 else "You",
-                            "disclosure": sel}), unsafe_allow_html=True)
+
+    st.select_slider("Post as", options=disc_labels_p, key="c_disc")
+
+    # Look up the currently selected option to drive the preview and safeguard note.
+    sel_label = st.session_state.c_disc
+    sel_opt   = next((o for o in disc_opts if o["label"] == sel_label), disc_opts[1])
+
+    # Preview: show how the post author will appear in the feed.
+    st.markdown(
+        "You will appear as: " +
+        author_row({"author": sel_opt["author"], "disclosure": sel_opt["level"]}),
+        unsafe_allow_html=True,
+    )
+
+    # Safeguard note — shown whenever posting under an alias (level 1).
+    # Per CLAUDE.md: "Posted under alias · not linked to your clinical identity in this space."
+    if sel_opt["level"] == 1:
+        st.markdown(
+            f'<div style="margin-top:6px;font-size:11.5px;color:{C["lived"]};'
+            f'background:{C["livedBg"]};border-left:3px solid {C["lived"]};'
+            f'border-radius:0 6px 6px 0;padding:5px 10px;">'
+            f'Posted under alias · not linked to your clinical identity in this space.'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
     st.button("Post", type="primary", on_click=submit_post)
 
 # Feed
