@@ -921,7 +921,7 @@ with st.sidebar:
     # Page navigation
     page = st.radio(
         "Navigate",
-        ["Community feed", "My identity"],
+        ["Community feed", "Identity"],
         label_visibility="collapsed",
         key="page",
     )
@@ -950,17 +950,30 @@ with st.sidebar:
         st.divider()
 
     st.markdown("**Why this design**")
-    st.markdown(
-        "- **Verification ≠ visibility.** Everyone is a verified patient; the "
-        "disclosure dial sets how much identity to reveal, per post.\n"
-        "- **Two register lanes.** A cool Clinical lane and a warm Lived lane.\n"
-        "- **Braided posts.** Stitch a fact to an experience — the dual-layered "
-        "pattern that worked best in the Reddit data."
-    )
+    if page == "Identity":
+        st.markdown(
+            "- Your verified identity only appears in the feed if you want it to.\n"
+            "- The link between your verified identity and your aliases is stored "
+            "locally and only visible to moderators."
+        )
+    elif researcher:
+        st.markdown(
+            "- **Researcher view** identifies encoding from the original "
+            "netnography, or flags the post as waiting to be encoded."
+        )
+    else:
+        st.markdown(
+            "- **Verification ≠ visibility.** Everyone is a verified patient; the "
+            "disclosure dial sets how much identity to reveal, per post.\n"
+            "- **Two registers.** A Clinical lane and a Lived Experience lane. " 
+                    "These are considered the different registers.\n"
+            "- **Braided posts.** Stitch a fact to an experience — the dual-layered "
+            "pattern linking clinical fact finding to emotional lived experience."
+        )
 
 
 # ── Page routing ──────────────────────────────────────────────────────────
-if page == "My identity":
+if page == "Identity":
     _show_admin()
     st.stop()
 
